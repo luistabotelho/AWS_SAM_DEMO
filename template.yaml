@@ -3,9 +3,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   aws-sam-demo
 
-  Sample SAM Template for aws-sam-demo
+  Simple Demo of AWS SAM. 
+  Can receive data and put that data into S3 while logging an event to DynamoDB.
+  Can retrieve the processed data once available.
   
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 30
@@ -14,8 +15,9 @@ Globals:
       - x86_64
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  ##########################################
+  ReceiveEventFunction:
+    Type: AWS::Serverless::Function 
     Connectors:
       EventTableConn:
         Properties:
@@ -25,22 +27,115 @@ Resources:
             - Read
             - Write
     Properties:
-      Handler: handlers/hello-world.handler
+      Handler: handlers/receive-event.handler
       MemorySize: 512
+      Policies:
+        - S3CrudPolicy:
+            BucketName: aws-sam-demo-data-bucket
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        ApiEvent:
+          Type: Api 
           Properties:
-            Path: /hello
-            Method: get
-    Metadata: # Manage esbuild properties
+            Path: /receive-event
+            Method: post
+    Metadata:
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
-        Target: "ES2020"
+        Target: "ES2022"
         Sourcemap: true
         EntryPoints: 
-        - handlers/hello-world.ts
+        - handlers/receive-event.ts
+  ##########################################
+  FetchReceivedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/fetch-received.handler
+      MemorySize: 512
+      Policies:
+        - S3CrudPolicy:
+            BucketName: aws-sam-demo-data-bucket
+      Events:
+        ApiEvent:
+          Type: Api 
+          Properties:
+            Path: /fetch-received
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "ES2022"
+        Sourcemap: true
+        EntryPoints: 
+        - handlers/fetch-received.ts
+  ##########################################
+  FetchResultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/fetch-result.handler
+      MemorySize: 512
+      Policies:
+        - S3CrudPolicy:
+            BucketName: aws-sam-demo-data-bucket
+      Events:
+        ApiEvent:
+          Type: Api 
+          Properties:
+            Path: /fetch-result
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "ES2022"
+        Sourcemap: true
+        EntryPoints: 
+        - handlers/fetch-result.ts
+  ##########################################
+  ProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/process.handler
+      MemorySize: 512
+      Policies:
+        - S3CrudPolicy:
+            BucketName: aws-sam-demo-data-bucket
+      Events:
+        S3Event:
+          Type: S3 
+          Properties:
+            Bucket: !Ref DataBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: Received/
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "ES2022"
+        Sourcemap: true
+        EntryPoints: 
+        - handlers/process.ts
+  #########################################
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: aws-sam-demo-data-bucket
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: True
+          BlockPublicPolicy: True
+          IgnorePublicAcls: True
+          RestrictPublicBuckets: True
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+  #########################################
   EventTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
@@ -54,15 +149,6 @@ Resources:
       TableName: Events
 
 Outputs:
-  # ServerlessApiApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
