@@ -95,6 +95,14 @@ Resources:
   ##########################################
   ProcessFunction:
     Type: AWS::Serverless::Function
+    Connectors:
+      EventTableConn:
+        Properties:
+          Destination:
+            Id: EventTable
+          Permissions:
+            - Read
+            - Write
     Properties:
       Handler: handlers/process.handler
       MemorySize: 512
